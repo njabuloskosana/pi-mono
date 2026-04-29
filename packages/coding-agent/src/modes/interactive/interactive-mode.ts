@@ -83,6 +83,14 @@ import { getChangelogPath, getNewEntries, parseChangelog } from "../../utils/cha
 import { copyToClipboard } from "../../utils/clipboard.js";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.js";
 import { parseGitUrl } from "../../utils/git.js";
+import { isGitRepo } from "../../utils/git-repo.js";
+import {
+	discoverProjects,
+	type ProjectInfo,
+	resolveProjectBranches,
+	resolveProjectsRoot,
+	sortProjects,
+} from "../../utils/projects.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool } from "../../utils/tools-manager.js";
 import { ArminComponent } from "./components/armin.js";
@@ -105,6 +113,7 @@ import { keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.js";
 import { LoginDialogComponent } from "./components/login-dialog.js";
 import { ModelSelectorComponent } from "./components/model-selector.js";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "./components/oauth-selector.js";
+import { ProjectSelectorComponent } from "./components/project-selector.js";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.js";
 import { SessionSelectorComponent } from "./components/session-selector.js";
 import { SettingsSelectorComponent } from "./components/settings-selector.js";
@@ -2557,6 +2566,12 @@ export class InteractiveMode {
 			if (text === "/logout") {
 				this.showOAuthSelector("logout");
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/project" || text.startsWith("/project ")) {
+				const searchTerm = text.startsWith("/project ") ? text.slice(9).trim() : undefined;
+				this.editor.setText("");
+				await this.handleProjectCommand(searchTerm);
 				return;
 			}
 			if (text === "/new") {
@@ -5251,6 +5266,93 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Markdown(hotkeys.trim(), 1, 1, this.getMarkdownThemeWithSettings()));
 		this.chatContainer.addChild(new DynamicBorder());
 		this.ui.requestRender();
+	}
+
+	private async handleProjectCommand(searchTerm?: string): Promise<void> {
+		const root = resolveProjectsRoot(this.sessionManager.getCwd());
+		let projects = discoverProjects(root);
+		const currentPath = this.sessionManager.getCwd();
+
+		// Ensure current project is in the list even if started outside the root
+		if (!projects.some((p) => p.path === currentPath) && isGitRepo(currentPath)) {
+			projects.push({ name: path.basename(currentPath), path: currentPath });
+		}
+
+		projects = sortProjects(projects, currentPath);
+
+		if (projects.length === 0) {
+			this.showStatus(`No git repositories found in ${root}`);
+			return;
+		}
+
+		// Resolve branches lazily in the background
+		void resolveProjectBranches(projects).then(() => {
+			this.ui.requestRender();
+		});
+
+		this.showSelector((done) => {
+			const selector = new ProjectSelectorComponent(
+				this.ui,
+				projects,
+				currentPath,
+				async (project) => {
+					done();
+					if (project.path === currentPath) {
+						this.ui.requestRender();
+						return;
+					}
+					await this.switchToProject(project);
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+				searchTerm,
+			);
+			return { component: selector, focus: selector };
+		});
+	}
+
+	private async switchToProject(project: ProjectInfo): Promise<void> {
+		if (this.loadingAnimation) {
+			this.loadingAnimation.stop();
+			this.loadingAnimation = undefined;
+		}
+		this.statusContainer.clear();
+
+		try {
+			const result = await this.runtimeHost.switchProject(project.path);
+			if (result.cancelled) {
+				return;
+			}
+
+			// Update process cwd
+			process.chdir(project.path);
+
+			// Update footer git watcher
+			this.footerDataProvider.setCwd(project.path);
+			this.footer.setSession(this.session);
+
+			// Clear chat for new project
+			this.chatContainer.clear();
+			this.pendingMessagesContainer.clear();
+			this.compactionQueuedMessages = [];
+			this.streamingComponent = undefined;
+			this.streamingMessage = undefined;
+			this.pendingTools.clear();
+
+			// Rebind extensions and UI
+			await this.rebindCurrentSession();
+
+			// Show confirmation
+			const branch = this.footerDataProvider.getGitBranch();
+			const branchText = branch ? ` (${branch})` : "";
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("accent", `✓ Switched to ${project.name}${branchText}`), 1, 1));
+			this.ui.requestRender();
+		} catch (error: unknown) {
+			await this.handleFatalRuntimeError("Failed to switch project", error);
+		}
 	}
 
 	private async handleClearCommand(): Promise<void> {

@@ -112,6 +112,34 @@ export class AgentSessionRuntime {
 		this.beforeSessionInvalidate = beforeSessionInvalidate;
 	}
 
+	/**
+	 * Switch to a different project directory. Creates a new session for the
+	 * target cwd, tears down the current session, and replaces the runtime.
+	 */
+	async switchProject(
+		newCwd: string,
+		options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
+	): Promise<{ cancelled: boolean }> {
+		const beforeResult = await this.emitBeforeSwitch("new");
+		if (beforeResult.cancelled) {
+			return beforeResult;
+		}
+
+		const previousSessionFile = this.session.sessionFile;
+		const sessionManager = SessionManager.continueRecent(newCwd);
+		await this.teardownCurrent("new", sessionManager.getSessionFile());
+		this.apply(
+			await this.createRuntime({
+				cwd: newCwd,
+				agentDir: this.services.agentDir,
+				sessionManager,
+				sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+			}),
+		);
+		await this.finishSessionReplacement(options?.withSession);
+		return { cancelled: false };
+	}
+
 	private async emitBeforeSwitch(
 		reason: "new" | "resume",
 		targetSessionFile?: string,
