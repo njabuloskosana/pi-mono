@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { isGitRepo, readGitBranch } from "./git-repo.js";
+import { isGitRepo, readGitBranch } from "./git-repo.ts";
 
 export interface ProjectInfo {
 	name: string;

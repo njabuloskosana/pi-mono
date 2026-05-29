@@ -1,8 +1,8 @@
-import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text } from "@mariozechner/pi-tui";
-import type { ProjectInfo } from "../../../utils/projects.js";
-import { shortenPath } from "../../../utils/projects.js";
-import { theme } from "../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
+import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text } from "@earendil-works/pi-tui";
+import type { ProjectInfo } from "../../../utils/projects.ts";
+import { shortenPath } from "../../../utils/projects.ts";
+import { theme } from "../theme/theme.ts";
+import { DynamicBorder } from "./dynamic-border.ts";
 
 /**
  * Component that renders a project selector with search.
