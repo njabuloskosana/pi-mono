@@ -1,13 +1,21 @@
 import { eastAsianWidth } from "get-east-asian-width";
 
-// Grapheme segmenter (shared instance)
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+// segmenters (shared instance)
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
 /**
  * Get the shared grapheme segmenter instance.
  */
-export function getSegmenter(): Intl.Segmenter {
-	return segmenter;
+export function getGraphemeSegmenter(): Intl.Segmenter {
+	return graphemeSegmenter;
+}
+
+/**
+ * Get the shared word segmenter instance.
+ */
+export function getWordSegmenter(): Intl.Segmenter {
+	return wordSegmenter;
 }
 
 /**
@@ -62,7 +70,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
 	if (!hasAnsi && !hasTabs) {
 		let result = "";
 		let width = 0;
-		for (const { segment } of segmenter.segment(text)) {
+		for (const { segment } of graphemeSegmenter.segment(text)) {
 			const w = graphemeWidth(segment);
 			if (width + w > maxWidth) {
 				break;
@@ -109,7 +117,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
 			end++;
 		}
 
-		for (const { segment } of segmenter.segment(text.slice(i, end))) {
+		for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
 			const w = graphemeWidth(segment);
 			if (width + w > maxWidth) {
 				return { text: result, width };
@@ -180,12 +188,14 @@ function graphemeWidth(segment: string): number {
 
 	let width = eastAsianWidth(cp);
 
-	// Trailing halfwidth/fullwidth forms
+	// Trailing halfwidth/fullwidth forms and AM vowels that segment with a base.
 	if (segment.length > 1) {
 		for (const char of segment.slice(1)) {
 			const c = char.codePointAt(0)!;
 			if (c >= 0xff00 && c <= 0xffef) {
 				width += eastAsianWidth(c);
+			} else if (c === 0x0e33 || c === 0x0eb3) {
+				width += 1;
 			}
 		}
 	}
@@ -237,7 +247,7 @@ export function visibleWidth(str: string): number {
 
 	// Calculate width
 	let width = 0;
-	for (const { segment } of segmenter.segment(clean)) {
+	for (const { segment } of graphemeSegmenter.segment(clean)) {
 		width += graphemeWidth(segment);
 	}
 
@@ -251,6 +261,20 @@ export function visibleWidth(str: string): number {
 	widthCache.set(str, width);
 
 	return width;
+}
+
+/**
+ * Normalize text for terminal output without changing logical editor content.
+ * Some terminals render precomposed Thai/Lao AM vowels inconsistently during
+ * differential repaint. Their compatibility decompositions have the same cell
+ * width but avoid stale-cell artifacts in terminal renderers.
+ */
+const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/;
+const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/g;
+
+export function normalizeTerminalOutput(str: string): string {
+	if (!THAI_LAO_AM_REGEX.test(str)) return str;
+	return str.replace(THAI_LAO_AM_GLOBAL_REGEX, (char) => (char === "\u0e33" ? "\u0e4d\u0e32" : "\u0ecd\u0eb2"));
 }
 
 /**
@@ -296,6 +320,42 @@ export function extractAnsiCode(str: string, pos: number): { code: string; lengt
 	return null;
 }
 
+type Osc8Terminator = "\x07" | "\x1b\\";
+
+interface ActiveHyperlink {
+	params: string;
+	url: string;
+	terminator: Osc8Terminator;
+}
+
+function parseOsc8Hyperlink(ansiCode: string): ActiveHyperlink | null | undefined {
+	if (!ansiCode.startsWith("\x1b]8;")) {
+		return undefined;
+	}
+
+	const terminator: Osc8Terminator = ansiCode.endsWith("\x07") ? "\x07" : "\x1b\\";
+	const body = ansiCode.slice(4, terminator === "\x07" ? -1 : -2);
+	const separatorIndex = body.indexOf(";");
+	if (separatorIndex === -1) {
+		return undefined;
+	}
+
+	const params = body.slice(0, separatorIndex);
+	const url = body.slice(separatorIndex + 1);
+	if (!url) {
+		return null;
+	}
+	return { params, url, terminator };
+}
+
+function formatOsc8Hyperlink(hyperlink: ActiveHyperlink): string {
+	return `\x1b]8;${hyperlink.params};${hyperlink.url}${hyperlink.terminator}`;
+}
+
+function formatOsc8Close(terminator: Osc8Terminator): string {
+	return `\x1b]8;;${terminator}`;
+}
+
 /**
  * Track active ANSI SGR codes to preserve styling across line breaks.
  */
@@ -311,13 +371,16 @@ class AnsiCodeTracker {
 	private strikethrough = false;
 	private fgColor: string | null = null; // Stores the full code like "31" or "38;5;240"
 	private bgColor: string | null = null; // Stores the full code like "41" or "48;5;240"
-	private activeHyperlink: string | null = null; // Active OSC 8 hyperlink URL, or null
+	private activeHyperlink: ActiveHyperlink | null = null;
 
 	process(ansiCode: string): void {
-		// OSC 8 hyperlink: \x1b]8;;<url>\x1b\\ (open) or \x1b]8;;\x1b\\ (close)
-		if (ansiCode.startsWith("\x1b]8;")) {
-			const m = ansiCode.match(/^\x1b\]8;[^;]*;([^\x1b\x07]*)/);
-			this.activeHyperlink = m?.[1] ? m[1] : null;
+		// OSC 8 hyperlink: \x1b]8;;<url>\x1b\\ (open) or \x1b]8;;\x1b\\ (close).
+		// Preserve the original terminator because some terminals only make BEL-terminated
+		// links clickable. OAuth login URLs use BEL, so reopening wrapped lines with ST
+		// made only the first physical line clickable in those terminals.
+		const hyperlink = parseOsc8Hyperlink(ansiCode);
+		if (hyperlink !== undefined) {
+			this.activeHyperlink = hyperlink;
 			return;
 		}
 
@@ -479,7 +542,7 @@ class AnsiCodeTracker {
 
 		let result = codes.length > 0 ? `\x1b[${codes.join(";")}m` : "";
 		if (this.activeHyperlink) {
-			result += `\x1b]8;;${this.activeHyperlink}\x1b\\`;
+			result += formatOsc8Hyperlink(this.activeHyperlink);
 		}
 		return result;
 	}
@@ -512,7 +575,7 @@ class AnsiCodeTracker {
 			result += "\x1b[24m"; // Underline off only
 		}
 		if (this.activeHyperlink) {
-			result += "\x1b]8;;\x1b\\"; // Close hyperlink; re-opened at line start via getActiveCodes()
+			result += formatOsc8Close(this.activeHyperlink.terminator); // Re-opened at line start via getActiveCodes()
 		}
 		return result;
 	}
@@ -694,7 +757,7 @@ function wrapSingleLine(line: string, width: number): string[] {
 	return wrapped.length > 0 ? wrapped.map((line) => line.trimEnd()) : [""];
 }
 
-const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
+export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
 
 /**
  * Check if a character is whitespace.
@@ -735,7 +798,7 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 			}
 			// Segment this non-ANSI portion into graphemes
 			const textPortion = word.slice(i, end);
-			for (const seg of segmenter.segment(textPortion)) {
+			for (const seg of graphemeSegmenter.segment(textPortion)) {
 				segments.push({ type: "grapheme", value: seg.segment });
 			}
 			i = end;
@@ -857,7 +920,7 @@ export function truncateToWidth(
 	const hasTabs = text.includes("\t");
 
 	if (!hasAnsi && !hasTabs) {
-		for (const { segment } of segmenter.segment(text)) {
+		for (const { segment } of graphemeSegmenter.segment(text)) {
 			const width = graphemeWidth(segment);
 			if (keepContiguousPrefix && keptWidth + width <= targetWidth) {
 				result += segment;
@@ -912,7 +975,7 @@ export function truncateToWidth(
 				end++;
 			}
 
-			for (const { segment } of segmenter.segment(text.slice(i, end))) {
+			for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
 				const width = graphemeWidth(segment);
 				if (keepContiguousPrefix && keptWidth + width <= targetWidth) {
 					if (pendingAnsi) {
@@ -982,7 +1045,7 @@ export function sliceWithWidth(
 		let textEnd = i;
 		while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
 
-		for (const { segment } of segmenter.segment(line.slice(i, textEnd))) {
+		for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
 			const w = graphemeWidth(segment);
 			const inRange = currentCol >= startCol && currentCol < endCol;
 			const fits = !strict || currentCol + w <= endCol;
@@ -1050,7 +1113,7 @@ export function extractSegments(
 		let textEnd = i;
 		while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
 
-		for (const { segment } of segmenter.segment(line.slice(i, textEnd))) {
+		for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
 			const w = graphemeWidth(segment);
 
 			if (currentCol < beforeEnd) {

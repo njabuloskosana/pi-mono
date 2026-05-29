@@ -20,8 +20,8 @@ import {
 	type SimpleStreamOptions,
 	streamSimpleAnthropic,
 	streamSimpleOpenAIResponses,
-} from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // =============================================================================
 // Constants
@@ -327,7 +327,7 @@ export function streamGitLabDuo(
 export default function (pi: ExtensionAPI) {
 	pi.registerProvider("gitlab-duo", {
 		baseUrl: AI_GATEWAY_URL,
-		apiKey: "GITLAB_TOKEN",
+		apiKey: "$GITLAB_TOKEN",
 		api: "gitlab-duo-api",
 		models: MODELS.map(({ id, name, reasoning, input, cost, contextWindow, maxTokens }) => ({
 			id,

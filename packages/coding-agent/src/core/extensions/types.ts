@@ -14,7 +14,7 @@ import type {
 	AgentToolUpdateCallback,
 	ThinkingLevel,
 	ToolExecutionMode,
-} from "@mariozechner/pi-agent-core";
+} from "@earendil-works/pi-agent-core";
 import type {
 	Api,
 	AssistantMessageEvent,
@@ -27,7 +27,7 @@ import type {
 	SimpleStreamOptions,
 	TextContent,
 	ToolResultMessage,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -38,29 +38,29 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import type { Static, TSchema } from "typebox";
-import type { Theme } from "../../modes/interactive/theme/theme.js";
-import type { BashResult } from "../bash-executor.js";
-import type { CompactionPreparation, CompactionResult } from "../compaction/index.js";
-import type { EventBus } from "../event-bus.js";
-import type { ExecOptions, ExecResult } from "../exec.js";
-import type { ReadonlyFooterDataProvider } from "../footer-data-provider.js";
-import type { KeybindingsManager } from "../keybindings.js";
-import type { CustomMessage } from "../messages.js";
-import type { ModelRegistry } from "../model-registry.js";
+import type { Theme } from "../../modes/interactive/theme/theme.ts";
+import type { BashResult } from "../bash-executor.ts";
+import type { CompactionPreparation, CompactionResult } from "../compaction/index.ts";
+import type { EventBus } from "../event-bus.ts";
+import type { ExecOptions, ExecResult } from "../exec.ts";
+import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
+import type { KeybindingsManager } from "../keybindings.ts";
+import type { CustomMessage } from "../messages.ts";
+import type { ModelRegistry } from "../model-registry.ts";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
 	ReadonlySessionManager,
 	SessionEntry,
 	SessionManager,
-} from "../session-manager.js";
-import type { SlashCommandInfo } from "../slash-commands.js";
-import type { SourceInfo } from "../source-info.js";
-import type { BuildSystemPromptOptions } from "../system-prompt.js";
-import type { BashOperations } from "../tools/bash.js";
-import type { EditToolDetails } from "../tools/edit.js";
+} from "../session-manager.ts";
+import type { SlashCommandInfo } from "../slash-commands.ts";
+import type { SourceInfo } from "../source-info.ts";
+import type { BuildSystemPromptOptions } from "../system-prompt.ts";
+import type { BashOperations } from "../tools/bash.ts";
+import type { EditToolDetails } from "../tools/edit.ts";
 import type {
 	BashToolDetails,
 	BashToolInput,
@@ -74,12 +74,12 @@ import type {
 	ReadToolDetails,
 	ReadToolInput,
 	WriteToolInput,
-} from "../tools/index.js";
+} from "../tools/index.ts";
 
-export type { ExecOptions, ExecResult } from "../exec.js";
-export type { BuildSystemPromptOptions } from "../system-prompt.js";
+export type { ExecOptions, ExecResult } from "../exec.ts";
+export type { BuildSystemPromptOptions } from "../system-prompt.ts";
 export type { AgentToolResult, AgentToolUpdateCallback, ToolExecutionMode };
-export type { AppKeybinding, KeybindingsManager } from "../keybindings.js";
+export type { AppKeybinding, KeybindingsManager } from "../keybindings.ts";
 
 // ============================================================================
 // UI Context
@@ -115,6 +115,7 @@ export interface WorkingIndicatorOptions {
 
 /** Wrap the current autocomplete provider with additional behavior. */
 export type AutocompleteProviderFactory = (current: AutocompleteProvider) => AutocompleteProvider;
+export type EditorFactory = (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => EditorComponent;
 
 /**
  * UI context for extensions to request interactive UI.
@@ -225,12 +226,12 @@ export interface ExtensionUIContext {
 	 * - `keybindings`: KeybindingsManager for app-level keybindings
 	 *
 	 * For full app keybinding support (escape, ctrl+d, model switching, etc.),
-	 * extend `CustomEditor` from `@mariozechner/pi-coding-agent` and call
+	 * extend `CustomEditor` from `@earendil-works/pi-coding-agent` and call
 	 * `super.handleInput(data)` for keys you don't handle.
 	 *
 	 * @example
 	 * ```ts
-	 * import { CustomEditor } from "@mariozechner/pi-coding-agent";
+	 * import { CustomEditor } from "@earendil-works/pi-coding-agent";
 	 *
 	 * class VimEditor extends CustomEditor {
 	 *   private mode: "normal" | "insert" = "insert";
@@ -249,9 +250,10 @@ export interface ExtensionUIContext {
 	 * );
 	 * ```
 	 */
-	setEditorComponent(
-		factory: ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => EditorComponent) | undefined,
-	): void;
+	setEditorComponent(factory: EditorFactory | undefined): void;
+
+	/** Get the currently configured custom editor factory, or undefined when using the default editor. */
+	getEditorComponent(): EditorFactory | undefined;
 
 	/** Get the current theme for styling. */
 	readonly theme: Theme;
@@ -716,6 +718,13 @@ export interface ModelSelectEvent {
 	source: ModelSelectSource;
 }
 
+/** Fired when a new thinking level is selected */
+export interface ThinkingLevelSelectEvent {
+	type: "thinking_level_select";
+	level: ThinkingLevel;
+	previousLevel: ThinkingLevel;
+}
+
 // ============================================================================
 // User Bash Events
 // ============================================================================
@@ -747,6 +756,8 @@ export interface InputEvent {
 	images?: ImageContent[];
 	/** Where the input came from */
 	source: InputSource;
+	/** How the input will be delivered during streaming, or undefined when idle */
+	streamingBehavior?: "steer" | "followUp";
 }
 
 /** Result from input event handler */
@@ -956,6 +967,7 @@ export type ExtensionEvent =
 	| ToolExecutionUpdateEvent
 	| ToolExecutionEndEvent
 	| ModelSelectEvent
+	| ThinkingLevelSelectEvent
 	| UserBashEvent
 	| InputEvent
 	| ToolCallEvent
@@ -989,6 +1001,11 @@ export interface ToolResultEventResult {
 	content?: (TextContent | ImageContent)[];
 	details?: unknown;
 	isError?: boolean;
+}
+
+export interface MessageEndEventResult {
+	/** Replace the finalized message. The replacement must keep the original message role. */
+	message?: AgentMessage;
 }
 
 export interface BeforeAgentStartEventResult {
@@ -1099,11 +1116,12 @@ export interface ExtensionAPI {
 	on(event: "turn_end", handler: ExtensionHandler<TurnEndEvent>): void;
 	on(event: "message_start", handler: ExtensionHandler<MessageStartEvent>): void;
 	on(event: "message_update", handler: ExtensionHandler<MessageUpdateEvent>): void;
-	on(event: "message_end", handler: ExtensionHandler<MessageEndEvent>): void;
+	on(event: "message_end", handler: ExtensionHandler<MessageEndEvent, MessageEndEventResult>): void;
 	on(event: "tool_execution_start", handler: ExtensionHandler<ToolExecutionStartEvent>): void;
 	on(event: "tool_execution_update", handler: ExtensionHandler<ToolExecutionUpdateEvent>): void;
 	on(event: "tool_execution_end", handler: ExtensionHandler<ToolExecutionEndEvent>): void;
 	on(event: "model_select", handler: ExtensionHandler<ModelSelectEvent>): void;
+	on(event: "thinking_level_select", handler: ExtensionHandler<ThinkingLevelSelectEvent>): void;
 	on(event: "tool_call", handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>): void;
 	on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): void;
 	on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): void;
@@ -1195,7 +1213,7 @@ export interface ExtensionAPI {
 	/** Get the list of currently active tool names. */
 	getActiveTools(): string[];
 
-	/** Get all configured tools with parameter schema and source metadata. */
+	/** Get all configured tools with parameter schema, prompt guidelines, and source metadata. */
 	getAllTools(): ToolInfo[];
 
 	/** Set the active tools by name. */
@@ -1238,7 +1256,7 @@ export interface ExtensionAPI {
 	 * // Register a new provider with custom models
 	 * pi.registerProvider("my-proxy", {
 	 *   baseUrl: "https://proxy.example.com",
-	 *   apiKey: "PROXY_API_KEY",
+	 *   apiKey: "$PROXY_API_KEY",
 	 *   api: "anthropic-messages",
 	 *   models: [
 	 *     {
@@ -1300,9 +1318,11 @@ export interface ExtensionAPI {
 
 /** Configuration for registering a provider via pi.registerProvider(). */
 export interface ProviderConfig {
+	/** Display name for the provider in UI. */
+	name?: string;
 	/** Base URL for the API endpoint. Required when defining models. */
 	baseUrl?: string;
-	/** API key or environment variable name. Required when defining models (unless oauth provided). */
+	/** API key literal, env interpolation ($ENV_VAR or ${ENV_VAR}), or leading !command. Required when defining models (unless oauth provided). */
 	apiKey?: string;
 	/** API type. Required at provider or model level when defining models. */
 	api?: Api;
@@ -1337,8 +1357,12 @@ export interface ProviderModelConfig {
 	name: string;
 	/** API type override for this model. */
 	api?: Api;
+	/** API endpoint URL override for this model. */
+	baseUrl?: string;
 	/** Whether the model supports extended thinking. */
 	reasoning: boolean;
+	/** Maps pi thinking levels to provider/model-specific values; null marks a level unsupported. */
+	thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
 	/** Supported input types. */
 	input: ("text" | "image")[];
 	/** Cost per token (for tracking, can be 0). */
@@ -1400,8 +1424,8 @@ export type GetSessionNameHandler = () => string | undefined;
 
 export type GetActiveToolsHandler = () => string[];
 
-/** Tool info with name, description, parameter schema, and source metadata */
-export type ToolInfo = Pick<ToolDefinition, "name" | "description" | "parameters"> & {
+/** Tool info with name, description, parameter schema, prompt guidelines, and source metadata. */
+export type ToolInfo = Pick<ToolDefinition, "name" | "description" | "parameters" | "promptGuidelines"> & {
 	sourceInfo: SourceInfo;
 };
 

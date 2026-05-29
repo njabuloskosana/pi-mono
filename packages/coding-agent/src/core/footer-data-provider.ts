@@ -1,8 +1,8 @@
 import { type ExecFileException, execFile, spawnSync } from "child_process";
 import { existsSync, type FSWatcher, readFileSync, unwatchFile, watchFile } from "fs";
 import { dirname, join } from "path";
-import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.js";
-import { findGitPaths, type GitPaths } from "../utils/git-repo.js";
+import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
+import { findGitPaths, type GitPaths } from "../utils/git-repo.ts";
 
 /** Ask git for the current branch. Returns null on detached HEAD or if git is unavailable. */
 function resolveBranchWithGitSync(repoDir: string): string | null {

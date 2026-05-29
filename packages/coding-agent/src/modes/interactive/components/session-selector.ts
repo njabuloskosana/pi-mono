@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as os from "node:os";
 import {
@@ -12,13 +12,14 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
-} from "@mariozechner/pi-tui";
-import { KeybindingsManager } from "../../../core/keybindings.js";
-import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.js";
-import { theme } from "../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
-import { keyHint, keyText } from "./keybinding-hints.js";
-import { filterAndSortSessions, hasSessionName, type NameFilter, type SortMode } from "./session-selector-search.js";
+} from "@earendil-works/pi-tui";
+import { KeybindingsManager } from "../../../core/keybindings.ts";
+import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
+import { canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
+import { theme } from "../theme/theme.ts";
+import { DynamicBorder } from "./dynamic-border.ts";
+import { keyHint, keyText } from "./keybinding-hints.ts";
+import { filterAndSortSessions, hasSessionName, type NameFilter, type SortMode } from "./session-selector-search.ts";
 
 type SessionScope = "current" | "all";
 
@@ -49,11 +50,7 @@ function formatSessionDate(date: Date): string {
 
 function canonicalizePath(path: string | undefined): string | undefined {
 	if (!path) return path;
-	try {
-		return realpathSync(path);
-	} catch {
-		return path;
-	}
+	return _canonicalizePath(path);
 }
 
 class SessionSelectorHeader implements Component {

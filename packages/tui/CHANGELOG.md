@@ -2,6 +2,110 @@
 
 ## [Unreleased]
 
+## [0.77.0] - 2026-05-28
+
+### Fixed
+
+- Fixed keyboard protocol negotiation to ignore mismatched or delayed terminal responses, avoiding false Kitty keyboard protocol detection ([#5091](https://github.com/earendil-works/pi/pull/5091) by [@mitsuhiko](https://github.com/mitsuhiko)).
+
+## [0.76.0] - 2026-05-27
+
+### Added
+
+- Added an opt-in Markdown renderer option to preserve source ordered-list markers for transcript rendering ([#5013](https://github.com/earendil-works/pi/issues/5013)).
+
+### Fixed
+
+- Fixed `Shift+Enter` in Apple Terminal by detecting local macOS modifier state when Terminal.app sends plain Return.
+- Fixed Windows Terminal capability detection to enable OSC 8 hyperlinks, preserving clickable long URLs across wrapped lines ([#4923](https://github.com/earendil-works/pi/issues/4923)).
+- Fixed JetBrains terminal capability detection to enable truecolor while disabling unsupported OSC 8 hyperlinks ([#5037](https://github.com/earendil-works/pi-mono/pull/5037) by [@Perlence](https://github.com/Perlence)).
+- Fixed editor and input word navigation/deletion to use Unicode word boundaries while preserving ASCII punctuation boundaries ([#5022](https://github.com/earendil-works/pi-mono/pull/5022) by [@haoqixu](https://github.com/haoqixu), [#5067](https://github.com/earendil-works/pi-mono/pull/5067) by [@haoqixu](https://github.com/haoqixu), [#5068](https://github.com/earendil-works/pi-mono/pull/5068) by [@haoqixu](https://github.com/haoqixu)).
+
+## [0.75.5] - 2026-05-23
+
+### Changed
+
+- Replaced the optional `koffi` dependency for Windows VT input with a tiny vendored native helper, reducing install size while preserving Shift+Tab handling ([#4480](https://github.com/earendil-works/pi/issues/4480)).
+
+## [0.75.4] - 2026-05-20
+
+### Changed
+
+- Removed the package-level development watch script now that the root TypeScript check validates strip-only-compatible sources.
+
+### Fixed
+
+- Fixed loader initialization so indicator startup cannot run before frames are initialized.
+- Fixed truecolor capability detection to align terminal image rendering with the interactive theme detector.
+
+## [0.75.3] - 2026-05-18
+
+## [0.75.2] - 2026-05-18
+
+## [0.75.1] - 2026-05-18
+
+## [0.75.0] - 2026-05-17
+
+### Breaking Changes
+
+- Raised the minimum supported Node.js version to 22.19.0.
+
+## [0.74.1] - 2026-05-16
+
+### Added
+
+- Added markdown list-item wrapping that preserves indentation for wrapped continuation lines ([#4327](https://github.com/earendil-works/pi-mono/pull/4327) by [@Perlence](https://github.com/Perlence)).
+
+### Fixed
+
+- Fixed markdown task-list checkbox rendering ([#4379](https://github.com/earendil-works/pi-mono/pull/4379) by [@Perlence](https://github.com/Perlence)).
+- Fixed markdown rendering robustness for very large markdown files ([#4463](https://github.com/earendil-works/pi-mono/pull/4463) by [@ndanielherrera](https://github.com/ndanielherrera)).
+- Fixed Kitty image placement when the viewport is shorter than the rendered image ([#4461](https://github.com/earendil-works/pi-mono/pull/4461) by [@xu0o0](https://github.com/xu0o0)).
+- Fixed WezTerm Kitty keyboard protocol edge cases so escape handling remains correct ([#4482](https://github.com/earendil-works/pi-mono/pull/4482) by [@Felixoid](https://github.com/Felixoid)).
+- Fixed inline image rendering to cap portrait images by height instead of always scaling them to the configured maximum width.
+
+## [0.74.0] - 2026-05-07
+
+## [0.73.1] - 2026-05-07
+
+### Fixed
+
+- Fixed wrapped OSC 8 hyperlinks to preserve BEL terminators so OAuth login URLs remain clickable on every wrapped line.
+- Fixed Kitty inline image redraws to stay within TUI-owned terminal regions and avoid writing below the active viewport.
+- Fixed Kitty inline image rendering by letting the terminal allocate image ids and bounding parsed image ids to valid values.
+- Fixed inline image capability detection to disable inline images in cmux terminals.
+
+## [0.73.0] - 2026-05-04
+
+### Fixed
+
+- Fixed fuzzy ranking to prioritize exact matches in selector and autocomplete results.
+
+## [0.72.1] - 2026-05-02
+
+## [0.72.0] - 2026-05-01
+
+## [0.71.1] - 2026-05-01
+
+## [0.71.0] - 2026-04-30
+
+### Fixed
+
+- Fixed `ProcessTerminal` to fall back to `COLUMNS` and `LINES` before defaulting to 80x24 dimensions ([#4004](https://github.com/badlogic/pi-mono/issues/4004))
+- Fixed editor rendering artifacts for Thai Sara Am and Lao AM vowel characters ([#3904](https://github.com/badlogic/pi-mono/issues/3904))
+
+## [0.70.6] - 2026-04-28
+
+## [0.70.5] - 2026-04-27
+
+## [0.70.4] - 2026-04-27
+
+## [0.70.3] - 2026-04-27
+
+### Fixed
+
+- Fixed duplicate printable characters from Kitty keyboard protocol CSI-u plus raw character input on layouts such as Italian ([#3780](https://github.com/badlogic/pi-mono/issues/3780))
+
 ## [0.70.2] - 2026-04-24
 
 ## [0.70.1] - 2026-04-24
